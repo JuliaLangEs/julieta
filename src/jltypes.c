@@ -3493,7 +3493,7 @@ void jl_init_types(void)
     jl_lambda_info_type =
         jl_new_datatype(jl_symbol("LambdaInfo"),
                         jl_any_type, jl_emptysvec,
-                        jl_svec(23, jl_symbol("code"), jl_symbol("slotnames"),
+                        jl_svec(24, jl_symbol("code"), jl_symbol("slotnames"),
                                 jl_symbol("slottypes"), jl_symbol("slotflags"),
                                 jl_symbol("gensymtypes"), jl_symbol("rettype"),
                                 jl_symbol("sparam_syms"), jl_symbol("sparam_vals"),
@@ -3506,8 +3506,8 @@ void jl_init_types(void)
                                 jl_symbol("file"), jl_symbol("line"),
                                 jl_symbol("nargs"), jl_symbol("inferred"),
                                 jl_symbol("pure"), jl_symbol("isva"),
-                                jl_symbol("inInference")),
-                        jl_svec(23, jl_any_type, jl_array_any_type,
+                                jl_symbol("inInference"), jl_symbol("inlined_lambdas")),
+                        jl_svec(24, jl_any_type, jl_array_any_type,
                                 jl_any_type, jl_array_uint8_type,
                                 jl_any_type, jl_any_type,
                                 jl_simplevector_type, jl_simplevector_type,
@@ -3517,7 +3517,7 @@ void jl_init_types(void)
                                 jl_module_type, jl_any_type,
                                 jl_sym_type, jl_int32_type,
                                 jl_int32_type, jl_bool_type,
-                                jl_bool_type, jl_bool_type, jl_bool_type),
+                                jl_bool_type, jl_bool_type, jl_bool_type, jl_any_type),
                         0, 1, 10);
 
     jl_typector_type =
@@ -3586,6 +3586,7 @@ void jl_init_types(void)
     jl_compute_field_offsets(jl_simplevector_type);
     jl_simplevector_type->pointerfree = 0;
 
+    empty_sym = jl_symbol("");
     call_sym = jl_symbol("call");
     quote_sym = jl_symbol("quote");
     inert_sym = jl_symbol("inert");

@@ -72,6 +72,7 @@ jl_value_t *jl_readonlymemory_exception;
 
 jl_sym_t *call_sym;    jl_sym_t *dots_sym;
 jl_sym_t *module_sym;  jl_sym_t *slot_sym;
+jl_sym_t *empty_sym;
 jl_sym_t *export_sym;  jl_sym_t *import_sym;
 jl_sym_t *importall_sym; jl_sym_t *toplevel_sym;
 jl_sym_t *quote_sym;   jl_sym_t *amp_sym;
@@ -378,6 +379,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *tvars, jl_svec_
         jl_lambda_info_set_ast(li, ast);
         JL_GC_POP();
     }
+    li->inlined_lambdas = jl_nothing;
     return li;
 }
 
@@ -411,6 +413,7 @@ JL_DLLEXPORT jl_lambda_info_t *jl_copy_lambda_info(jl_lambda_info_t *linfo)
     new_linfo->functionID = linfo->functionID;
     new_linfo->specFunctionID = linfo->specFunctionID;
     new_linfo->needs_sparam_vals_ducttape = linfo->needs_sparam_vals_ducttape;
+    new_linfo->inlined_lambdas = linfo->inlined_lambdas;
     return new_linfo;
 }
 

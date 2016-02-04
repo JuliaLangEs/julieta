@@ -842,6 +842,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         if (li->functionID)
             write_int8(s, li->jlcall_api);
         write_int8(s, li->needs_sparam_vals_ducttape);
+        jl_serialize_value(s, li->inlined_lambdas);
     }
     else if (jl_typeis(v, jl_module_type)) {
         jl_serialize_module(s, (jl_module_t*)v);
@@ -1475,6 +1476,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         jl_delayed_fptrs(li, func_llvm, cfunc_llvm);
         li->jlcall_api = func_llvm ? read_int8(s) : 0;
         li->needs_sparam_vals_ducttape = read_int8(s);
+        li->inlined_lambdas = jl_deserialize_value(s, &li->inlined_lambdas);
         return (jl_value_t*)li;
     }
     else if (vtag == (jl_value_t*)jl_module_type) {
@@ -2056,6 +2058,7 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_lambda_info_t *li, jl_array_t *ast)
     }
     tree_literal_values = li->def->roots;
     tree_enclosing_module = li->module;
+
     jl_serialize_value(&dest, ast);
 
     //jl_printf(JL_STDERR, "%d bytes, %d values\n", dest.size, vals->length);
@@ -2088,7 +2091,9 @@ JL_DLLEXPORT jl_array_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_array_t *dat
     ios_setbuf(&src, (char*)bytes->data, jl_array_len(bytes), 0);
     src.size = jl_array_len(bytes);
     int en = jl_gc_enable(0); // Might GC
+
     jl_array_t *v = (jl_array_t*)jl_deserialize_value(&src, NULL);
+
     jl_gc_enable(en);
     tree_literal_values = NULL;
     tree_enclosing_module = NULL;

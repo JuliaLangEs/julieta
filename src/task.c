@@ -490,7 +490,6 @@ static void init_task(jl_task_t *t, char *stack)
 
 #endif /* !COPY_STACKS */
 
-
 // yield to exception handler
 void JL_NORETURN throw_internal(jl_value_t *e)
 {

@@ -1490,10 +1490,13 @@ function newvar!(sv::InferenceState, typ)
 end
 
 # copy a LambdaInfo just enough to make it not share data with li.def
-function unshare_linfo(li::LambdaInfo)
+function unshare_linfo(li::LambdaInfo, sparams::SimpleVector, atypes::DataType)
     if li.nargs > 0
         if li === li.def
             li = ccall(:jl_copy_lambda_info, Any, (Any,), li)::LambdaInfo
+            li.sparam_vals = sparams
+            li.tfunc = nothing
+            li.specTypes = atypes
         end
         if !isa(li.code, Array{Any,1})
             li.code = ccall(:jl_uncompress_ast, Any, (Any,Any), li, li.code)
@@ -1591,7 +1594,7 @@ function typeinf_edge(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, nee
             end
         end
         # add lam to be inferred and record the edge
-        linfo = unshare_linfo(linfo)
+        linfo = unshare_linfo(linfo, sparams, atypes)
         # our stack frame inference context
         frame = InferenceState(linfo, atypes, sparams, optimize)
 
@@ -1656,6 +1659,7 @@ function typeinf_ext(linfo::LambdaInfo, toplevel::Bool)
             linfo.gensymtypes = code.gensymtypes
             linfo.rettype = code.rettype
             linfo.pure = code.pure
+            linfo.inlined_lambdas = code.inlined_lambdas
         end
     end
     nothing
@@ -2007,6 +2011,7 @@ function finish(me::InferenceState)
         out.gensymtypes = me.linfo.gensymtypes
         out.rettype = me.linfo.rettype
         out.pure = me.linfo.pure
+        out.inlined_lambdas = me.linfo.inlined_lambdas
     end
     if me.tfunc_idx != -1
         me.linfo.def.tfunc[me.tfunc_idx + 1] = me.linfo
@@ -2291,6 +2296,17 @@ end
 
 
 #### post-inference optimizations ####
+
+function add_inlined_loc!(enclosing::LambdaInfo, data::LambdaInfo)
+    if enclosing.inlined_lambdas === nothing
+        enclosing.inlined_lambdas = Any[data]
+        1
+    else
+        il = enclosing.inlined_lambdas::Vector{Any}
+        push!(il, data)
+        length(il)
+    end
+end
 
 # inline functions whose bodies are "inline_worthy"
 # where the function body doesn't contain any argument more than once.
@@ -2700,6 +2716,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     append!(enclosing.slotflags, linfo.slotflags[na+1:end])
 
     # make labels / goto statements unique
+    # relocate inlining information
     newlabels = zeros(Int,label_counter(body.args)+1)
     for i = 1:length(body.args)
         a = body.args[i]
@@ -2708,6 +2725,9 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
             newlabel = genlabel(sv)
             newlabels[a.label+1] = newlabel.label
             body.args[i] = newlabel
+        elseif isa(a,Expr) && a.head === :meta && a.args[1] === :push_lambda
+            inlined_idx = a.args[2]::Int
+            a.args[2] = add_inlined_loc!(enclosing, linfo.inlined_lambdas[inlined_idx])
         end
     end
     for i = 1:length(body.args)
@@ -2768,14 +2788,15 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         expr = lastexpr.args[1]
     end
 
-    if length(stmts) == 1
-        # remove line number when inlining a single expression. see issue #13725
-        s = stmts[1]
-        if isa(s,Expr)&&is(s.head,:line) || isa(s,LineNumberNode)
-            pop!(stmts)
-        end
+   if length(stmts) >= 0
+       if length(stmts) == 1 && (isa(stmts[1],Expr) && stmts[1].head === :line || isa(stmts[1], LineNumberNode))
+           empty!(stmts)
+       else
+           loc = add_inlined_loc!(enclosing, linfo)
+           unshift!(stmts,Expr(:meta, :push_lambda, loc))
+           push!(stmts, Expr(:meta, :pop_lambda))
+       end
     end
-
     if !isempty(stmts) && !propagate_inbounds
         # inlined statements are out-of-bounds by default
         unshift!(stmts, Expr(:inbounds, false))
