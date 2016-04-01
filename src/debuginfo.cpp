@@ -662,7 +662,7 @@ static int lookup_pointer(DIContext *context, jl_frame_t **frames,
                 // we got an index in the inlined_lambda array
                 int inl_idx = std::stoi(func_name.substr(semi_pos+1, std::string::npos));
                 func_name = func_name.substr(0, semi_pos);
-                frame->linfo = (jl_lambda_info_t*)jl_cellref(outer_linfo->inlined_lambdas, inl_idx-1);
+                frame->linfo = (jl_lambda_info_t*)jl_cellref(outer_linfo->def->roots, inl_idx-1);
             }
         }
     }

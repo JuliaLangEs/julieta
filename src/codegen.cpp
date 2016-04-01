@@ -4638,8 +4638,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                 jl_value_t *location = (jl_value_t*)jl_cellref(stmt_e->args, 1);
                 if (jl_is_long(location)) { // index in the inlined lambda table
                     int lambda_idx = jl_unbox_long(location);
-                    assert(jl_is_array(lam->inlined_lambdas));
-                    jl_lambda_info_t *inlined_lam = (jl_lambda_info_t*)jl_cellref(lam->inlined_lambdas, lambda_idx-1);
+                    jl_lambda_info_t *inlined_lam = (jl_lambda_info_t*)jl_cellref(lam->def->roots, lambda_idx-1);
                     assert(jl_is_lambda_info(inlined_lam));
                     DI_sp_stack.push_back(SP);
                     DI_loc_stack.push_back(builder.getCurrentDebugLocation());

@@ -201,7 +201,6 @@ typedef struct _jl_lambda_info_t {
     int8_t pure;
     int8_t isva;
     int8_t inInference; // flags to tell if inference is running on this function
-    jl_value_t *inlined_lambdas;
 
     // hidden fields:
     uint8_t called;  // bit flags: whether each of the first 8 arguments is called

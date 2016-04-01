@@ -842,7 +842,6 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         if (li->functionID)
             write_int8(s, li->jlcall_api);
         write_int8(s, li->needs_sparam_vals_ducttape);
-        jl_serialize_value(s, li->inlined_lambdas);
     }
     else if (jl_typeis(v, jl_module_type)) {
         jl_serialize_module(s, (jl_module_t*)v);
@@ -1476,7 +1475,6 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         jl_delayed_fptrs(li, func_llvm, cfunc_llvm);
         li->jlcall_api = func_llvm ? read_int8(s) : 0;
         li->needs_sparam_vals_ducttape = read_int8(s);
-        li->inlined_lambdas = jl_deserialize_value(s, &li->inlined_lambdas);
         return (jl_value_t*)li;
     }
     else if (vtag == (jl_value_t*)jl_module_type) {

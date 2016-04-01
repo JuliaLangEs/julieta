@@ -1664,7 +1664,6 @@ function typeinf_ext(linfo::LambdaInfo, toplevel::Bool)
             linfo.gensymtypes = code.gensymtypes
             linfo.rettype = code.rettype
             linfo.pure = code.pure
-            linfo.inlined_lambdas = code.inlined_lambdas
         end
     end
     nothing
@@ -2016,7 +2015,6 @@ function finish(me::InferenceState)
         out.gensymtypes = me.linfo.gensymtypes
         out.rettype = me.linfo.rettype
         out.pure = me.linfo.pure
-        out.inlined_lambdas = me.linfo.inlined_lambdas
     end
     if me.tfunc_idx != -1
         me.linfo.def.tfunc[me.tfunc_idx + 1] = me.linfo
@@ -2303,11 +2301,16 @@ end
 #### post-inference optimizations ####
 
 function add_inlined_loc!(enclosing::LambdaInfo, data::LambdaInfo)
-    if enclosing.inlined_lambdas === nothing
-        enclosing.inlined_lambdas = Any[data]
+    if !isdefined(enclosing.def, :roots)
+        enclosing.def.roots = Any[data]
         1
     else
-        il = enclosing.inlined_lambdas::Vector{Any}
+        il = enclosing.def.roots::Vector{Any}
+        for i=1:length(il)
+            if il[i] === data
+                return i
+            end
+        end
         push!(il, data)
         length(il)
     end
@@ -2732,7 +2735,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
             body.args[i] = newlabel
         elseif isa(a,Expr) && a.head === :meta && a.args[1] === :push_lambda
             inlined_idx = a.args[2]::Int
-            a.args[2] = add_inlined_loc!(enclosing, linfo.inlined_lambdas[inlined_idx])
+            a.args[2] = add_inlined_loc!(enclosing, linfo.def.roots[inlined_idx])
         end
     end
     for i = 1:length(body.args)

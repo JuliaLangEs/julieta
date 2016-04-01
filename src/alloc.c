@@ -379,7 +379,6 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *tvars, jl_svec_
         jl_lambda_info_set_ast(li, ast);
         JL_GC_POP();
     }
-    li->inlined_lambdas = jl_nothing;
     return li;
 }
 
@@ -413,7 +412,6 @@ JL_DLLEXPORT jl_lambda_info_t *jl_copy_lambda_info(jl_lambda_info_t *linfo)
     new_linfo->functionID = linfo->functionID;
     new_linfo->specFunctionID = linfo->specFunctionID;
     new_linfo->needs_sparam_vals_ducttape = linfo->needs_sparam_vals_ducttape;
-    new_linfo->inlined_lambdas = linfo->inlined_lambdas;
     return new_linfo;
 }
 
