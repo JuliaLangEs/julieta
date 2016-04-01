@@ -4630,10 +4630,12 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
             }
             if (ctx.debug_enabled) builder.SetCurrentDebugLocation(DebugLoc::get(lno, 0, (MDNode*)SP, inlinedAt));
         }
-        else if (ctx.debug_enabled && jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == meta_sym) {
-            jl_value_t *meta_arg = jl_cellref(((jl_expr_t*)stmt)->args, 0);
+        else if (ctx.debug_enabled && jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == meta_sym && jl_array_len(((jl_expr_t*)stmt)->args) >= 1) {
+            jl_expr_t *stmt_e = (jl_expr_t*)stmt;
+            jl_value_t *meta_arg = jl_cellref(stmt_e->args, 0);
             if (meta_arg == (jl_value_t*)jl_symbol("push_lambda")) {
-                jl_value_t *location = (jl_value_t*)jl_cellref(((jl_expr_t*)stmt)->args, 1);
+                assert(jl_array_len(stmt_e->args) == 2);
+                jl_value_t *location = (jl_value_t*)jl_cellref(stmt_e->args, 1);
                 if (jl_is_long(location)) { // index in the inlined lambda table
                     int lambda_idx = jl_unbox_long(location);
                     assert(jl_is_array(lam->inlined_lambdas));

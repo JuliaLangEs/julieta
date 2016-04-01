@@ -637,18 +637,21 @@ end
 
 function isconstantref(f::ANY, sv::InferenceState)
     if isa(f,TopNode)
+        f = f::TopNode
         m = _topmod(sv)
         return isconst(m, f.name) && isdefined(m, f.name) && f
     end
     if isa(f,GlobalRef)
+        f = f::GlobalRef
         M = f.mod; s = f.name
         return isdefined(M,s) && isconst(M,s) && f
     end
     if isa(f,Expr)
+        f = f::Expr
         if is(f.head,:call)
             if length(f.args) == 3 && isa(f.args[1], TopNode) &&
                 is(f.args[1].name,:getfield) && isa(f.args[3],QuoteNode)
-                s = f.args[3].value
+                s = (f.args[3]::QuoteNode).value
                 if isa(f.args[2],Module)
                     M = f.args[2]
                 else
@@ -661,6 +664,7 @@ function isconstantref(f::ANY, sv::InferenceState)
                         return false
                     end
                 end
+                M = M::Module
                 return isdefined(M,s) && isconst(M,s) && f
             end
         elseif is(f.head,:inert)
@@ -674,6 +678,7 @@ function isconstantref(f::ANY, sv::InferenceState)
         return false
     end
     if isa(f,Symbol)
+        f = f::Symbol
         return _iisconst(f, sv) && f
     elseif !isa(f,Expr)
         return f
@@ -2362,7 +2367,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     end
     meth = meth[1]::SimpleVector
     metharg = meth[1]
-    methsp = meth[2]
+    methsp = meth[2]::SimpleVector
     linfo = try
         func_for_method(meth[3],metharg,methsp)
     catch
@@ -2815,6 +2820,12 @@ end
 # doesn't work on Tuples of TypeVars
 const inline_incompletematch_allowed = false
 
+# should the expression be part of the inline cost model
+function inline_ignore(ex)
+    isa(ex, LineNumberNode) ||
+    isa(ex, Expr) && ((ex::Expr).head === :line ||
+                      (ex::Expr).head === :meta)
+end
 inline_worthy(body, cost::Integer) = true
 function inline_worthy(body::Expr, cost::Integer=1000) # precondition: 0 < cost; nominal cost = 1000
     if popmeta!(body, :inline)[1]
@@ -2824,17 +2835,16 @@ function inline_worthy(body::Expr, cost::Integer=1000) # precondition: 0 < cost;
         return false
     end
     symlim = 1000 + 5_000_000 ÷ cost
-    nargs = 0
-    for arg in body.args
-        if (!isa(arg, LineNumberNode) &&
-            !(isa(arg, Expr) && (arg::Expr).head === :line))
-            nargs += 1
+    nstmt = 0
+    for stmt in body.args
+        if !inline_ignore(stmt)
+            nstmt += 1
         end
     end
-    if nargs < (symlim + 500) ÷ 1000
+    if nstmt < (symlim + 500) ÷ 1000
         symlim *= 16
         symlim ÷= 1000
-        if occurs_more(body, e->(!isa(e, LineNumberNode)), symlim) < symlim
+        if occurs_more(body, e->!inline_ignore(e), symlim) < symlim
             return true
         end
     end
