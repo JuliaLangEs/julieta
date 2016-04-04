@@ -2306,6 +2306,7 @@ function add_inlined_loc!(enclosing::LambdaInfo, data::LambdaInfo)
         1
     else
         il = enclosing.def.roots::Vector{Any}
+        # TODO if the quadratic lookup ends up being too expensive we could build a lookup hash before starting the inlining
         for i=1:length(il)
             if il[i] === data
                 return i
@@ -2796,8 +2797,8 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         expr = lastexpr.args[1]
     end
 
-   if length(stmts) >= 0
-       if length(stmts) == 1 && (isa(stmts[1],Expr) && stmts[1].head === :line || isa(stmts[1], LineNumberNode))
+   if !isempty(stmts)
+       if all(stmt -> isa(stmt,Expr) && stmt.head === :line || isa(stmt, LineNumberNode), stmts)
            empty!(stmts)
        else
            loc = add_inlined_loc!(enclosing, linfo)
