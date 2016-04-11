@@ -77,8 +77,8 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol)
     i = 1
     while i <= length(bt)
         lkups = StackTraces.lookup(bt[i])
+        i += 1
         for lkup in lkups
-            i += 1
             if lkup === StackTraces.UNKNOWN
                 continue
             end

@@ -1210,7 +1210,7 @@ int jl_getFunctionInfo(jl_frame_t **frames_out, size_t pointer, int skipC, int n
     return jl_getDylibFunctionInfo(frames_out, pointer, skipC, noInline);
 }
 
-
+#if defined(LLVM37) && (defined(_OS_LINUX_) || defined(_OS_DARWIN_))
 const int SECTION_MEMORY_SIZE = 2*1024*1024; // 2MB
 struct section_memory {
     uint8_t *current;
@@ -1221,6 +1221,9 @@ enum section_type {
 };
 static section_memory *section_mem[3];
 #include <sys/mman.h>
+#ifdef _OS_DARWIN_
+#define MAP_ANONYMOUS MAP_ANON
+#endif
 uint8_t *juliaAllocateSection(uintptr_t size, unsigned align, section_type typ)
 {
     section_memory **pmem = &section_mem[(int)typ];
@@ -1255,7 +1258,7 @@ uint8_t *juliaAllocateSection(uintptr_t size, unsigned align, section_type typ)
     (*pmem)->current = block + sizeof(section_memory);
     return juliaAllocateSection(size, align, typ);
 }
-
+#endif
 
 #if defined(LLVM37) && (defined(_OS_LINUX_) || (defined(_OS_DARWIN_) && defined(LLVM_SHLIB)))
 extern "C" void __register_frame(void*);
@@ -1306,6 +1309,9 @@ public:
     ~RTDyldMemoryManagerOSX() override {};
     void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
     void deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
+    uint8_t *allocateCodeSection (uintptr_t Size, unsigned Alignment, unsigned SectionID, StringRef SectionName) override;
+    uint8_t *allocateDataSection (uintptr_t Size, unsigned Alignment, unsigned SectionID, StringRef SectionName, bool isReadOnly) override;
+
 };
 
 static void (*libc_register_frame)(void*)   = NULL;
@@ -1342,6 +1348,16 @@ void RTDyldMemoryManagerOSX::deregisterEHFrames(uint8_t *Addr,
         libc_deregister_frame(const_cast<char *>(Entry));
         __deregister_frame(const_cast<char *>(Entry));
     });
+}
+
+uint8_t *RTDyldMemoryManagerOSX::allocateCodeSection(uintptr_t Size, unsigned Alignment, unsigned SectionID, StringRef SectionName)
+{
+    return juliaAllocateSection(Size, Alignment >= 16 ? Alignment : 16, Sect_Code);
+}
+
+uint8_t *RTDyldMemoryManagerOSX::allocateDataSection(uintptr_t Size, unsigned Alignment, unsigned SectionID, StringRef SectionName, bool isReadOnly)
+{
+    return juliaAllocateSection(Size, Alignment >= 16 ? Alignment : 16, Sect_Data);
 }
 
 RTDyldMemoryManager* createRTDyldMemoryManagerOSX()
@@ -1701,7 +1717,7 @@ uint8_t *RTDyldMemoryManagerUnix::allocateCodeSection(uintptr_t Size, unsigned A
 
 uint8_t *RTDyldMemoryManagerUnix::allocateDataSection(uintptr_t Size, unsigned Alignment, unsigned SectionID, StringRef SectionName, bool isReadOnly)
 {
-    return juliaAllocateSection(Size, Alignment >= 16 ? Alignment : 16, Sect_Code);
+    return juliaAllocateSection(Size, Alignment >= 16 ? Alignment : 16, Sect_Data);
 }
 
 
