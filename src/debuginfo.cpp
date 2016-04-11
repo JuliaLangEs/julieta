@@ -1210,6 +1210,53 @@ int jl_getFunctionInfo(jl_frame_t **frames_out, size_t pointer, int skipC, int n
     return jl_getDylibFunctionInfo(frames_out, pointer, skipC, noInline);
 }
 
+
+const int SECTION_MEMORY_SIZE = 2*1024*1024; // 2MB
+struct section_memory {
+    uint8_t *current;
+    uint8_t *end;
+};
+enum section_type {
+    Sect_Code, Sect_Data, Sect_RoData
+};
+static section_memory *section_mem[3];
+#include <sys/mman.h>
+uint8_t *juliaAllocateSection(uintptr_t size, unsigned align, section_type typ)
+{
+    section_memory **pmem = &section_mem[(int)typ];
+    if (*pmem) {
+        section_memory *mem = *pmem;
+        uint8_t *current = mem->current;
+        int offset = align - (uintptr_t)current % align;
+        uint8_t *addr = current + offset;
+        uint8_t *end = addr + size;
+        if (end >= mem->end)
+            goto allocate_new_block;
+        mem->current = end;
+        return addr;
+    }
+ allocate_new_block:
+    if (size > SECTION_MEMORY_SIZE - sizeof(section_memory) - align)
+        abort(); // TODO make a mapping just for this one section
+    int prot = 0;
+    switch(typ) {
+    case Sect_Code:
+        prot = PROT_WRITE | PROT_EXEC | PROT_READ;
+        break;
+    case Sect_Data:
+    case Sect_RoData:
+        prot = PROT_WRITE | PROT_READ;
+        break;
+    }
+    uint8_t *block = (uint8_t*)mmap(0, SECTION_MEMORY_SIZE, prot, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+    // shamelessly leak the current block, we're not freeing generated code anyway
+    *pmem = (section_memory*)block;
+    (*pmem)->end = block + SECTION_MEMORY_SIZE;
+    (*pmem)->current = block + sizeof(section_memory);
+    return juliaAllocateSection(size, align, typ);
+}
+
+
 #if defined(LLVM37) && (defined(_OS_LINUX_) || (defined(_OS_DARWIN_) && defined(LLVM_SHLIB)))
 extern "C" void __register_frame(void*);
 extern "C" void __deregister_frame(void*);
@@ -1313,10 +1360,13 @@ class RTDyldMemoryManagerUnix : public SectionMemoryManager
     void operator=(const RTDyldMemoryManagerUnix&) = delete;
 
 public:
-    RTDyldMemoryManagerUnix() {};
+    RTDyldMemoryManagerUnix() {
+    };
     ~RTDyldMemoryManagerUnix() override {};
     void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
     void deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
+    uint8_t *allocateCodeSection (uintptr_t Size, unsigned Alignment, unsigned SectionID, StringRef SectionName) override;
+    uint8_t *allocateDataSection (uintptr_t Size, unsigned Alignment, unsigned SectionID, StringRef SectionName, bool isReadOnly) override;
 };
 
 struct unw_table_entry
@@ -1643,6 +1693,17 @@ void RTDyldMemoryManagerUnix::deregisterEHFrames(uint8_t *Addr,
     // the allocated entry above (or we could look in libunwind's internal
     // data structures).
 }
+
+uint8_t *RTDyldMemoryManagerUnix::allocateCodeSection(uintptr_t Size, unsigned Alignment, unsigned SectionID, StringRef SectionName)
+{
+    return juliaAllocateSection(Size, Alignment >= 16 ? Alignment : 16, Sect_Code);
+}
+
+uint8_t *RTDyldMemoryManagerUnix::allocateDataSection(uintptr_t Size, unsigned Alignment, unsigned SectionID, StringRef SectionName, bool isReadOnly)
+{
+    return juliaAllocateSection(Size, Alignment >= 16 ? Alignment : 16, Sect_Code);
+}
+
 
 RTDyldMemoryManager* createRTDyldMemoryManagerUnix()
 {
