@@ -635,8 +635,6 @@ static int lookup_pointer(DIContext *context, jl_frame_t **frames,
         *frames = new_frames;
     }
     jl_lambda_info_t *outer_linfo = (*frames)[n_frames-1].linfo;
-    jl_value_t *inline_lambdas = NULL;
-    JL_GC_PUSH1(&inline_lambdas);
     for (size_t i = 0; i < n_frames; i++) {
         bool inlined_frame = i != n_frames - 1;
         DILineInfo info;
@@ -650,23 +648,29 @@ static int lookup_pointer(DIContext *context, jl_frame_t **frames,
         jl_frame_t *frame = &(*frames)[i];
         std::string func_name(info.FunctionName);
 
+        if (inlined_frame) {
+            frame->inlined = 1;
+            frame->fromC = fromC;
+            if (outer_linfo) {
+                std::size_t semi_pos = func_name.find(';');
+                if (semi_pos != std::string::npos) {
+                    // we got an index in the inlined lambda array
+                    int inl_idx = std::stoi(func_name.substr(semi_pos+1, std::string::npos));
+                    func_name = func_name.substr(0, semi_pos);
+                    assert(1 <= inl_idx && inl_idx <= jl_array_len(outer_linfo->def->roots));
+                    frame->linfo = (jl_lambda_info_t*)jl_cellref(outer_linfo->def->roots, inl_idx-1);
+                }
+            }
+        }
+
         jl_copy_str(&frame->func_name, func_name.c_str());
         frame->line = info.Line;
         jl_copy_str(&frame->file_name, info.FileName.c_str());
 
-        if (inlined_frame) {
-            frame->inlined = 1;
-            frame->fromC = fromC;
-            std::size_t semi_pos = func_name.find(';');
-            if (semi_pos != std::string::npos) {
-                // we got an index in the inlined_lambda array
-                int inl_idx = std::stoi(func_name.substr(semi_pos+1, std::string::npos));
-                func_name = func_name.substr(0, semi_pos);
-                frame->linfo = (jl_lambda_info_t*)jl_cellref(outer_linfo->def->roots, inl_idx-1);
-            }
+        if (func_name == "<invalid>" || !func_name.compare(0, 7, "jlcall_") || !func_name.compare(0, 7, "jlcapi_")) {
+            frame->fromC = 1;
         }
     }
-    JL_GC_POP();
     return n_frames;
 }
 

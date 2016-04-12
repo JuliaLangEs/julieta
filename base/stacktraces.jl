@@ -41,7 +41,7 @@ typealias StackTrace Vector{StackFrame}
 
 const empty_sym = symbol("")
 const unk_sym = symbol("???")
-const UNKNOWN = StackFrame(unk_sym, unk_sym, -1) # === lookup(C_NULL)
+const UNKNOWN = StackFrame(unk_sym, unk_sym, -1, Nullable{LambdaInfo}(), true, false, 0) # === lookup(C_NULL)
 
 
 #=
@@ -92,6 +92,7 @@ up stack frame context information.
 """
 function lookup(pointer::Ptr{Void})
     infos = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), pointer - 1, false)
+    isempty(infos) && return [UNKNOWN]
     res = Array(StackFrame, length(infos))
     for i in 1:length(infos)
         info = infos[i]
@@ -112,7 +113,7 @@ doesn't return C functions, but this can be enabled.) When called without specif
 trace, `stacktrace` first calls `backtrace`.
 """
 function stacktrace(trace::Vector{Ptr{Void}}, c_funcs::Bool=false)
-    stack = map(lookup, trace)::StackTrace
+    stack = vcat(map(lookup, trace)...)::StackTrace
 
     # Remove frames that come from C calls.
     if !c_funcs
