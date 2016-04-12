@@ -666,7 +666,7 @@ static jl_lambda_info_t *jl_typemap_assoc_exact(union jl_typemap_t ml_or_cache, 
                     return li;
             }
             assert(jl_is_datatype(ty));
-            if (cache->arg1 != (void*)jl_nothing && offs < 2) {
+            if (cache->arg1 != (void*)jl_nothing && offs < 2 && n > 1) {
                 ml_or_cache = mtcache_hash_lookup(cache->arg1, ty, 0, offs);
                 if (jl_typeof(ml_or_cache.unknown) == (jl_value_t*)jl_typemap_entry_type &&
                         ml_or_cache.leaf->simplesig == (void*)jl_nothing) {
